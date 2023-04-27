@@ -1,14 +1,21 @@
-pragma solidity ^0.8.0;
+import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract CrowdfundingPlatform {
+contract CrowdfundingPlatform is Ownable {
+    struct Contribution {
+        address contributor;
+        uint256 amount;
+    }
+
     struct Project {
+        uint256 projectId;
         string name;
         string description;
         uint256 goal;
         uint256 deadline;
         uint256 minimumContribution;
         address payable owner;
-        mapping(address => uint256) contributions;
+        mapping(address => Contribution) contributions;
+        address[] contributorList;
         uint256 totalContributions;
         mapping(address => bool) claimed;
         string currency;
@@ -32,10 +39,43 @@ contract CrowdfundingPlatform {
         admin = payable(msg.sender);
         fee = 5; // 5% fee by default
     }
-    
-    modifier onlyAdmin() {
-        require(msg.sender == admin, "Only admin can call this function");
-        _;
+
+    // es necesaria esta funcion ya que no se puede inicializar un mapping en una funcion para una estructura
+    function initializeProject(uint256 _projectId, string memory _name, string memory _description, uint256 _goal, uint256 _deadline, uint256 _minimumContribution, address payable _owner, string memory _currency) internal {
+        Project storage project = projects[_projectId];
+        project.projectId = _projectId;
+        project.name = _name;
+        project.description = _description;
+        project.goal = _goal;
+        project.deadline = _deadline;
+        project.minimumContribution = _minimumContribution;
+        project.owner = _owner;
+        project.totalContributions = 0;
+        project.currency = _currency;
+        project.funded = false;
+    }
+
+    function addReward(uint256 _projectId, uint256 _index, string memory _reward) public {
+        Project storage project = projects[_projectId];
+        project.rewards[_index] = _reward;
+    }
+
+    function addContribution(uint256 _projectId, uint256 _amount) public payable {
+        Project storage project = projects[_projectId];
+        require(msg.value == _amount, "Amount should match value sent");
+        require(project.deadline > block.timestamp, "Deadline has passed");
+        require(_amount >= project.minimumContribution, "Amount should be greater than or equal to minimum contribution");
+        project.contributions[msg.sender] = Contribution({
+            contributor: msg.sender,
+            amount: _amount
+        });
+        project.contributorList.push(msg.sender);
+        project.totalContributions += _amount;
+        if (project.totalContributions == project.goal) {
+            project.funded = true;
+            emit ProjectFunded(_projectId, project.totalContributions);
+        }
+        emit ContributionAdded(_projectId, msg.sender, _amount);
     }
     
     function createProject(string memory _name, string memory _description, uint256 _goal, uint256 _deadline, uint256 _minimumContribution, string memory _currency) public {
@@ -44,25 +84,40 @@ contract CrowdfundingPlatform {
         require(bytes(_name).length > 0, "Name should not be empty");
         require(bytes(_currency).length > 0, "Currency should not be empty");
         projectCount++;
-        projects[projectCount] = Project({
-            name: _name,
-            description: _description,
-            goal: _goal,
-            deadline: _deadline,
-            minimumContribution: _minimumContribution,
-            owner: payable(msg.sender),
-            totalContributions: 0,
-            currency: _currency,
-            funded: false
-        });
+        initializeProject(projectCount, _name, _description, _goal, _deadline, _minimumContribution, payable(msg.sender), _currency);
         emit ProjectCreated(projectCount, _name, _goal, _deadline, _currency);
+    }
+
+    // Función para listar los proyectos
+    function getProjects() public view returns (uint[] memory) {
+    uint[] memory projectIds = new uint[](projectCount);
+        for (uint i = 0; i < projectCount; i++) {
+            projectIds[i] = i;
+        }
+        return projectIds;
+    }
+
+    // Función para configurar las criptomonedas aceptadas
+    function setAcceptedTokens(/* Parámetros de criptomonedas aceptadas */) public onlyOwner {
+        // ...
+    }
+
+    // Función para configurar el porcentaje de comisión
+    function setPlatformFee( uint256  _newFee) public onlyOwner {
+        require(_newFee > 0  && _newFee < 100, "Fee should be a percentage, between 0 and 100");
+        fee = _newFee;
+    }
+
+    // Función para retirar las comisiones recaudadas
+    function withdrawFees(/* Dirección de retiro */) public onlyOwner {
+        // ...
     }
     
     function contribute(uint256 _projectId) public payable {
         require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
         require(msg.value >= projects[_projectId].minimumContribution, "Minimum contribution not met");
         require(block.timestamp < projects[_projectId].deadline, "Deadline passed");
-        projects[_projectId].contributions[msg.sender] += msg.value;
+        projects[_projectId].contributions[msg.sender].amount += msg.value;
         projects[_projectId].totalContributions += msg.value;
         emit ContributionAdded(_projectId, msg.sender, msg.value);
         if (projects[_projectId].totalContributions >= projects[_projectId].goal && !projects[_projectId].funded) {
@@ -75,7 +130,13 @@ contract CrowdfundingPlatform {
     function claimReward(uint256 _projectId, uint256 _rewardIndex) public {
         require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
         require(block.timestamp >= projects[_projectId].deadline, "Deadline not passed");
-        require(projects[_projectId].contributions[msg.sender] > 0, "No contribution found");
-        require...
+        require(projects[_projectId].contributions[msg.sender].amount > 0, "No contribution found");
+        // require...
+    }
+
+}
+    
+pragma solidity ^0.8.0;
+
 
 

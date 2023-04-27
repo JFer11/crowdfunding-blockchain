@@ -1,0 +1,22 @@
+{
+  "name": "crowdfunding-blockchain",
+  "version": "1.0.0",
+  "description": "This project is a decentralized crowdfunding platform based on Solidity.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JFer11/crowdfunding-blockchain.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JFer11/crowdfunding-blockchain/issues"
+  },
+  "homepage": "https://github.com/JFer11/crowdfunding-blockchain#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.8.3"
+  }
+}
