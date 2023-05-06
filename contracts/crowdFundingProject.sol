@@ -2,9 +2,9 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract CrowdfundingProject is Ownable {
     // Estructura para almacenar información de los inversores y sus contribuciones
-    struct Investor {
-        // ...
-    }
+    // struct Investor {
+    //     ...
+    // }
 
     // Variables para almacenar la información del proyecto
     // ...
