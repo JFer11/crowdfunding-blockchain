@@ -6,7 +6,7 @@ import "./node_modules/@openzeppelin/contracts/access/Ownable.sol";
 
 
 contract CrowdfundingProject is Ownable {
-    // enum CurrencyType { ETHER, ERC20 }
+    enum CurrencyType { ETHER, ERC20 }
     struct Project {
         string name;
         string description;
@@ -16,16 +16,16 @@ contract CrowdfundingProject is Ownable {
         address payable owner;
         mapping(address => uint256) contributions;
         uint256 totalContributions;
-        mapping(address => bool) claimed;
+        CurrencyType currencyType;
         IERC20 ERCToken;
-        mapping(address => uint256) rewards;
-        bool funded;
+        bool fundsWithdrawn;
+        uint256 fundsInjected;
+        mapping(address => bool) rewardsClaimed;
     }
     mapping(uint256 => Project) public projects;
     uint256 public projectCount;
     uint256 public fee;
     mapping(IERC20 => bool) public validERC20Tokens;
-
 
     event ProjectCreated(uint256 projectId, string name, uint256 goal, uint256 deadline, IERC20 ERC20Token);
     event ProjectFunded(uint256 projectId, uint256 totalContributions);
@@ -36,10 +36,20 @@ contract CrowdfundingProject is Ownable {
     event AdminFeeWithdrawn(uint256 amount);
     event ValidERC20TokenSet(IERC20 ERC20Token, bool isValid);
 
-    
     constructor() {
         fee = 5; // default
     }
+
+    modifier validateProjectExistance(uint256 _projectId) {
+        require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
+        _;
+    }
+
+    modifier onlyProjectOwner(uint256 _projectId) {
+        require(msg.sender == projects[_projectId].owner, "Only project owner can perform this action");
+        _;
+    }
+
 
     function setPlatformFee( uint256  _newFee) public onlyOwner {
         require(_newFee > 0  && _newFee < 100, "Fee should be a percentage, between 0 and 100");
@@ -51,25 +61,11 @@ contract CrowdfundingProject is Ownable {
         emit ValidERC20TokenSet(_ERC20Token, _isValid);
     }
 
-    function createProject(string memory _name, string memory _description, uint256 _goal, uint256 _deadline, uint256 _minimumContribution, IERC20 _ERCToken) public {
-        // payable function, is it needed?
-        // require(msg.value == BASE_PRICE, "The specified amount of Ether is required to execute this function.");
+    function createProject(string memory _name, string memory _description, uint256 _goal, uint256 _deadline, uint256 _minimumContribution, CurrencyType _currencyType, IERC20 _ERCToken) public {
         require(_goal > 0, "Goal should be greater than zero");
         require(_deadline > block.timestamp, "Deadline should be in the future");
         require(bytes(_name).length > 0, "Name should not be empty");
-        require(validERC20Tokens[_ERCToken], "This ERC20 token is not supported by the platform");
-        // projectCount++;
-        // projects[projectCount] = Project({
-        //     name: _name,
-        //     description: _description,
-        //     goal: _goal,
-        //     deadline: _deadline,
-        //     minimumContribution: _minimumContribution,
-        //     owner: payable(msg.sender),
-        //     totalContributions: 0,
-        //     currency: _currency,
-        //     funded: false
-        // });
+        require(_currencyType == CurrencyType.ETHER || validERC20Tokens[_ERCToken], "Invalid currency. Only Ether or supported ERC20 tokens are accepted");
         Project storage p = projects[projectCount++];
         p.name = _name;
         p.description=  _description;
@@ -78,85 +74,89 @@ contract CrowdfundingProject is Ownable {
         p.minimumContribution = _minimumContribution;
         p.owner = payable(msg.sender);
         p.totalContributions = 0;
-        p.ERCToken = _ERCToken;
-        p.funded = false;
+        p.currencyType = _currencyType;
+        if (_currencyType == CurrencyType.ERC20) {
+            p.ERCToken = _ERCToken;
+        }
         emit ProjectCreated(projectCount, _name, _goal, _deadline, _ERCToken);
     }
 
-    function contribute(uint256 _projectId) public payable {
-        require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
-        require(msg.value >= projects[_projectId].minimumContribution, "Minimum contribution not met");
-        require(block.timestamp < projects[_projectId].deadline, "Deadline passed");
-        // Missing check if ETH or ERC20
-        // SI es payable, que onda, cuanto es de payable?
-        projects[_projectId].contributions[msg.sender] += msg.value;
-        projects[_projectId].totalContributions += msg.value;
-        emit ContributionAdded(_projectId, msg.sender, msg.value);
-        if (projects[_projectId].totalContributions >= projects[_projectId].goal && !projects[_projectId].funded) {
-            projects[_projectId].funded = true;
-            emit ProjectFunded(_projectId, projects[_projectId].totalContributions);
+    function contribute(uint256 _projectId) public payable validateProjectExistance(_projectId) {
+        Project storage p = projects[_projectId];
+        require(!p.fundsWithdrawn, "The project funds have already been withdrawn");
+        require(block.timestamp < p.deadline, "Deadline passed");
+        uint256 amount;
+        if (p.currencyType == CurrencyType.ETHER) {
+            require(msg.value >= p.minimumContribution, "Minimum contribution not met");
+            amount = msg.value;
+        } else {
+            uint256 allowance = p.ERCToken.allowance(msg.sender, address(this));
+            require(allowance >= p.minimumContribution, "Minimum contribution not met");
+            amount = allowance;
+            p.ERCToken.transferFrom(msg.sender, address(this), amount);
+        }
+        p.contributions[msg.sender] += amount;
+        p.totalContributions += amount;
+        emit ContributionAdded(_projectId, msg.sender, amount);
+        if (p.totalContributions >= p.goal) {
+            emit ProjectFunded(_projectId, p.totalContributions);
         }
     }
 
-    modifier onlyProjectOwner(uint256 _projectId) {
-        require(msg.sender == projects[_projectId].owner, "Only project owner can perform this action");
-        _;
-    }
+    function withdrawFunds(uint256 _projectId) public validateProjectExistance(_projectId) onlyProjectOwner(_projectId) {
+        Project storage p = projects[_projectId];
+        require(!p.fundsWithdrawn, "The project funds have already been withdrawn");
+        require(block.timestamp >= p.deadline, "Cannot withdraw before deadline");
+        require(p.totalContributions >= p.goal, "Cannot withdraw before reaching goal");
 
-    function claimRewards(uint256 _projectId, uint256 _rewardIndex) public {
-        require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
-        require(projects[_projectId].contributions[msg.sender] > 0, "No contribution found");
-        // require(projects[_projectId].funded, "Project is not yet fully funded");
-        // require(block.timestamp > projects[_projectId].deadline, "Deadline has not yet passed");
-        require(!projects[_projectId].claimed[msg.sender], "Rewards already claimed");
-        // Que es lo que se va a dar de recompensa? Mas ether?
-        projects[_projectId].claimed[msg.sender] = true;
-        // emit RewardClaimed(_projectId, msg.sender, projects[_projectId].rewards[_rewardIndex] .... mmmm...);
-    }
-
-    function claimFunds(uint256 _projectId) public {
-        require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
-        require(block.timestamp > projects[_projectId].deadline, "Deadline has not yet passed");
-        require(projects[_projectId].contributions[msg.sender] <= 0, "There have been no contributions made from this address or they may have already been claimed");
-        require(projects[_projectId].totalContributions >= projects[_projectId].goal, "The goal has been achieved, and no refunds will be issued");
-        uint256 amountToTransfer = projects[_projectId].contributions[msg.sender];
-        address payable _sender = payable(msg.sender);
-        _sender.transfer(amountToTransfer); 
-        emit FundsClaimed(_projectId, msg.sender, amountToTransfer);
-        projects[_projectId].contributions[msg.sender] = 0;
-    }
-
-    function withdrawFunds(uint256 _projectId) public onlyProjectOwner(_projectId) {
-        require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
-        require(projects[_projectId].funded, "Project is not yet fully funded");
-        require(!projects[_projectId].claimed[msg.sender], "Funds already claimed");
-        projects[_projectId].claimed[msg.sender] = true;
-        projects[_projectId].owner.transfer(projects[_projectId].totalContributions);
-    }
-
-    function injectRewards(uint256 _projectId, uint256 _rewardIndex) public payable onlyProjectOwner(_projectId) {
-        require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
-        require(!projects[_projectId].claimed[msg.sender], "Reward already claimed");
-        require(block.timestamp < projects[_projectId].deadline, "Deadline has already passed");
-        // que onda?
-        // require(_rewardIndex >= 0 && _rewardIndex < getRewardsCount(_projectId), "Invalid reward index");
-        // string memory reward = getReward(_projectId, _rewardIndex);
-        // require(bytes(reward).length > 0, "Reward should not be empty");
-        // projects[_projectId].claimed[msg.sender] = true;
-        // projects[_projectId].rewards[msg.sender] = _rewardIndex;
-        // emit RewardClaimed(_projectId, msg.sender, reward.... mmm .....);
-    }
-
-    function getProjects() public view returns (uint[] memory) {
-        uint[] memory projectIds = new uint[](projectCount);
-        for (uint i = 0; i < projectCount; i++) {
-            projectIds[i] = i;
+        uint256 amount = p.totalContributions;
+        if (p.currencyType == CurrencyType.ETHER) {
+            p.owner.transfer(amount);
+        } else {
+            p.ERCToken.transfer(p.owner, amount);
         }
-        return projectIds;
+
+        p.fundsWithdrawn = true;
+        emit FundsClaimed(_projectId, msg.sender, amount);
     }
 
-    // function addReward(uint256 _projectId, uint256 _index, string memory _reward) public {
-    //     Project storage project = projects[_projectId];
-    //     project.rewards[_index] = _reward;
-    // }
+    function injectRewards(uint256 _projectId) public payable validateProjectExistance(_projectId) onlyProjectOwner(_projectId) {
+        Project storage p = projects[_projectId];
+        require(block.timestamp >= p.deadline, "Cannot inject funds before deadline");
+        require(p.totalContributions >= p.goal, "Cannot inject funds before reaching goal");
+        
+        uint256 amount;
+        if (p.currencyType == CurrencyType.ETHER) {
+            require(msg.value > 0, "No Ether sent for injecting funds");
+            amount = msg.value;
+        } else {
+            uint256 allowance = p.ERCToken.allowance(msg.sender, address(this));
+            require(allowance > 0, "No ERC20 token allowed for injecting funds");
+            amount = allowance;
+            p.ERCToken.transferFrom(msg.sender, address(this), amount);
+        }
+
+        p.fundsInjected += amount;
+    }
+
+    function claimRewards(uint256 _projectId) public validateProjectExistance(_projectId) {
+        Project storage p = projects[_projectId];
+        require(block.timestamp >= p.deadline, "Cannot claim rewards before deadline");
+        require(p.totalContributions >= p.goal, "Cannot claim rewards before reaching goal");
+        require(p.fundsInjected > 0, "There are no funds injected in the project");
+
+        uint256 reward = (p.contributions[msg.sender] * p.fundsInjected) / p.totalContributions;  // Goal is always > 0. So totalContributions > 0.
+
+        require(reward > 0, "No rewards to claim");
+        require(!p.rewardsClaimed[msg.sender], "Rewards already claimed");
+
+        p.rewardsClaimed[msg.sender] = true;
+        
+        if (p.currencyType == CurrencyType.ETHER) {
+            payable(msg.sender).transfer(reward);
+        } else {
+            p.ERCToken.transfer(msg.sender, reward);
+        }
+    }
+
 }
