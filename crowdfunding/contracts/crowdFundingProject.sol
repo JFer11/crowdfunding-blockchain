@@ -26,6 +26,8 @@ contract CrowdfundingProject is Ownable {
     uint256 public projectCount;
     uint256 public fee;
     mapping(IERC20 => bool) public validERC20Tokens;
+    mapping(IERC20 => uint256) public platformERC20Fees;
+    uint256 public platformEtherFees;
 
     event ProjectCreated(uint256 projectId, string name, uint256 goal, uint256 deadline, IERC20 ERC20Token);
     event ProjectFunded(uint256 projectId, uint256 totalContributions);
@@ -33,8 +35,9 @@ contract CrowdfundingProject is Ownable {
     event RewardClaimed(uint256 projectId, address recipient, string reward);
     event FundsClaimed(uint256 projectId, address recipient, uint256 amount);
     event ProjectCancelled(uint256 projectId);
-    event AdminFeeWithdrawn(uint256 amount);
+    event AdminFeeWithdrawn(uint256 amount, string currencyType);
     event ValidERC20TokenSet(IERC20 ERC20Token, bool isValid);
+    event ContributionClaimed(uint256 projectId, address claimant, uint256 amount);
 
     constructor() {
         fee = 5; // default
@@ -109,10 +112,14 @@ contract CrowdfundingProject is Ownable {
         require(block.timestamp >= p.deadline, "Cannot withdraw before deadline");
         require(p.totalContributions >= p.goal, "Cannot withdraw before reaching goal");
 
-        uint256 amount = p.totalContributions;
+        uint256 platformFee = (p.totalContributions * fee) / 100;
+        uint256 amount = p.totalContributions - platformFee;
+
         if (p.currencyType == CurrencyType.ETHER) {
+            platformEtherFees += platformFee;
             p.owner.transfer(amount);
         } else {
+            platformERC20Fees[p.ERCToken] += platformFee;
             p.ERCToken.transfer(p.owner, amount);
         }
 
@@ -157,6 +164,42 @@ contract CrowdfundingProject is Ownable {
         } else {
             p.ERCToken.transfer(msg.sender, reward);
         }
+    }
+
+    function claimContribution(uint256 _projectId) public validateProjectExistance(_projectId) {
+        Project storage p = projects[_projectId];
+        require(block.timestamp >= p.deadline, "Cannot claim contribution before deadline");
+        require(p.totalContributions < p.goal, "Cannot claim contribution if the project had reached the financial goal");
+        require(p.contributions[msg.sender] > 0, "You have not made any contributions");
+
+        uint256 amount = p.contributions[msg.sender];
+        p.contributions[msg.sender] = 0;
+        p.totalContributions -= amount;
+
+        if (p.currencyType == CurrencyType.ETHER) {
+            payable(msg.sender).transfer(amount);
+        } else {
+            p.ERCToken.transfer(msg.sender, amount);
+        }
+
+        emit ContributionClaimed(_projectId, msg.sender, amount);
+    }
+
+    function withdrawPlatformFee(CurrencyType _currencyType, IERC20 _ERCToken) external onlyOwner {
+        require(_currencyType == CurrencyType.ETHER || validERC20Tokens[_ERCToken], "Invalid currency. Only Ether or supported ERC20 tokens are accepted");
+        uint256 amount;
+        if (_currencyType == CurrencyType.ETHER) {
+            require(platformEtherFees > 0, "No Ether fees to withdraw");
+            amount = platformEtherFees;
+            platformEtherFees = 0;
+            payable(owner()).transfer(amount);
+        } else {
+            require(platformERC20Fees[_ERCToken] > 0, "No ERC20 fees to withdraw");
+            amount = platformERC20Fees[_ERCToken];
+            platformERC20Fees[_ERCToken] = 0;
+            _ERCToken.transfer(owner(), amount);
+        }
+        emit AdminFeeWithdrawn(amount, _currencyType == CurrencyType.ETHER ? "ETHER" : "ERC20");
     }
 
 }
