@@ -32,9 +32,8 @@ contract CrowdfundingProject is Ownable {
     event ProjectCreated(uint256 projectId, string name, uint256 goal, uint256 deadline, IERC20 ERC20Token);
     event ProjectFunded(uint256 projectId, uint256 totalContributions);
     event ContributionAdded(uint256 projectId, address contributor, uint256 amount);
-    event RewardClaimed(uint256 projectId, address recipient, string reward);
+    event RewardClaimed(uint256 projectId, address recipient, uint256 reward);
     event FundsClaimed(uint256 projectId, address recipient, uint256 amount);
-    event ProjectCancelled(uint256 projectId);
     event AdminFeeWithdrawn(uint256 amount, string currencyType);
     event ValidERC20TokenSet(IERC20 ERC20Token, bool isValid);
     event ContributionClaimed(uint256 projectId, address claimant, uint256 amount);
@@ -164,6 +163,7 @@ contract CrowdfundingProject is Ownable {
         } else {
             p.ERCToken.transfer(msg.sender, reward);
         }
+        emit RewardClaimed(_projectId, msg.sender, reward);
     }
 
     function claimContribution(uint256 _projectId) public validateProjectExistance(_projectId) {

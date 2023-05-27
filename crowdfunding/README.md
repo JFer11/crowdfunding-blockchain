@@ -65,3 +65,27 @@ To request Ether for the testnet we will use Rinkeby Authenticated Faucet
 This is a platform used to obtain testnet Ether for deploying and interacting with smart contracts. This faucet requires users to authenticate their request for Ether by making a public post on social media platforms like Twitter, Google Plus, or Facebook. This authentication mechanism helps prevent spam and abuse of the faucet while ensuring a fair distribution of testnet Ether.
 
 Will need to create a Twitter for this.
+
+### Run test
+
+```sh
+npx hardhat test
+```
+
+### Check test coverage
+
+```sh
+npx hardhat coverage
+```
+
+### Check test coverage
+
+```sh
+npx hardhat coverage
+```
+
+### Deploy to hardhat network
+
+```sh
+npx hardhat --verbose run scripts/deploy.js
+```
