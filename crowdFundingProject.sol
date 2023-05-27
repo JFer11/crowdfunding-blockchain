@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract CrowdfundingProject {
+import "./node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./node_modules/@openzeppelin/contracts/access/Ownable.sol";
+
+
+contract CrowdfundingProject is Ownable {
+    // enum CurrencyType { ETHER, ERC20 }
     struct Project {
         string name;
         string description;
@@ -12,27 +17,47 @@ contract CrowdfundingProject {
         mapping(address => uint256) contributions;
         uint256 totalContributions;
         mapping(address => bool) claimed;
-        string currency;
+        IERC20 ERCToken;
         mapping(address => uint256) rewards;
         bool funded;
     }
     mapping(uint256 => Project) public projects;
     uint256 public projectCount;
+    uint256 public fee;
+    mapping(IERC20 => bool) public validERC20Tokens;
 
-    event ProjectCreated(uint256 projectId, string name, uint256 goal, uint256 deadline, string currency);
+
+    event ProjectCreated(uint256 projectId, string name, uint256 goal, uint256 deadline, IERC20 ERC20Token);
     event ProjectFunded(uint256 projectId, uint256 totalContributions);
     event ContributionAdded(uint256 projectId, address contributor, uint256 amount);
     event RewardClaimed(uint256 projectId, address recipient, string reward);
     event FundsClaimed(uint256 projectId, address recipient, uint256 amount);
     event ProjectCancelled(uint256 projectId);
-    
-    // Que onda con memory en algunos parametros y otros no. SOLO VA en los strings???
+    event AdminFeeWithdrawn(uint256 amount);
+    event ValidERC20TokenSet(IERC20 ERC20Token, bool isValid);
 
-    function createProject(string memory _name, string memory _description, uint256 _goal, uint256 _deadline, uint256 _minimumContribution, string memory _currency) public {
+    
+    constructor() {
+        fee = 5; // default
+    }
+
+    function setPlatformFee( uint256  _newFee) public onlyOwner {
+        require(_newFee > 0  && _newFee < 100, "Fee should be a percentage, between 0 and 100");
+        fee = _newFee;
+    }
+
+    function setValidCurrency(IERC20 _ERC20Token, bool _isValid) public onlyOwner {
+        validERC20Tokens[_ERC20Token] = _isValid;
+        emit ValidERC20TokenSet(_ERC20Token, _isValid);
+    }
+
+    function createProject(string memory _name, string memory _description, uint256 _goal, uint256 _deadline, uint256 _minimumContribution, IERC20 _ERCToken) public {
+        // payable function, is it needed?
+        // require(msg.value == BASE_PRICE, "The specified amount of Ether is required to execute this function.");
         require(_goal > 0, "Goal should be greater than zero");
         require(_deadline > block.timestamp, "Deadline should be in the future");
         require(bytes(_name).length > 0, "Name should not be empty");
-        require(bytes(_currency).length > 0, "Currency should not be empty");
+        require(validERC20Tokens[_ERCToken], "This ERC20 token is not supported by the platform");
         // projectCount++;
         // projects[projectCount] = Project({
         //     name: _name,
@@ -53,9 +78,9 @@ contract CrowdfundingProject {
         p.minimumContribution = _minimumContribution;
         p.owner = payable(msg.sender);
         p.totalContributions = 0;
-        p.currency = _currency;
+        p.ERCToken = _ERCToken;
         p.funded = false;
-        emit ProjectCreated(projectCount, _name, _goal, _deadline, _currency);
+        emit ProjectCreated(projectCount, _name, _goal, _deadline, _ERCToken);
     }
 
     function contribute(uint256 _projectId) public payable {
