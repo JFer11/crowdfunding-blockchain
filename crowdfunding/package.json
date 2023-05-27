@@ -18,7 +18,7 @@
   },
   "homepage": "https://github.com/JFer11/crowdfunding-blockchain#readme",
   "dependencies": {
-    "@openzeppelin/contracts": "^4.8.3"
+    "@openzeppelin/contracts": "^4.9.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^2.0.2",
