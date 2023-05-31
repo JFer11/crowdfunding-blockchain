@@ -43,7 +43,7 @@ contract CrowdfundingProject is Ownable {
     }
 
     modifier validateProjectExistance(uint256 _projectId) {
-        require(_projectId > 0 && _projectId <= projectCount, "Invalid project ID");
+        require(_projectId >= 0 && _projectId <= projectCount, "Invalid project ID");
         _;
     }
 
@@ -65,7 +65,7 @@ contract CrowdfundingProject is Ownable {
 
     function createProject(string memory _name, string memory _description, uint256 _goal, uint256 _deadline, uint256 _minimumContribution, CurrencyType _currencyType, IERC20 _ERCToken) public {
         require(_goal > 0, "Goal should be greater than zero");
-        require(_deadline > block.timestamp, "Deadline should be in the future");
+        require(_deadline > block.timestamp, "Deadline should be in the future"); 
         require(bytes(_name).length > 0, "Name should not be empty");
         require(_currencyType == CurrencyType.ETHER || validERC20Tokens[_ERCToken], "Invalid currency. Only Ether or supported ERC20 tokens are accepted");
         Project storage p = projects[projectCount++];
@@ -97,7 +97,7 @@ contract CrowdfundingProject is Ownable {
             amount = allowance;
             p.ERCToken.transferFrom(msg.sender, address(this), amount);
         }
-        p.contributions[msg.sender] += amount;
+        p.contributions[msg.sender] += amount; // TODO: check if this is ok
         p.totalContributions += amount;
         emit ContributionAdded(_projectId, msg.sender, amount);
         if (p.totalContributions >= p.goal) {
