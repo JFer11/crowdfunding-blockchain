@@ -90,10 +90,12 @@ contract CrowdfundingProject is Ownable {
         uint256 amount;
         if (p.currencyType == CurrencyType.ETHER) {
             require(msg.value >= p.minimumContribution, "Minimum contribution not met");
+            // require(msg.value <= p.goal - p.totalContributions, "Your contribution exceeds the remaining amount needed to reach the goal");
             amount = msg.value;
         } else {
             uint256 allowance = p.ERCToken.allowance(msg.sender, address(this));
             require(allowance >= p.minimumContribution, "Minimum contribution not met");
+            // require(msg.value <= p.goal - p.totalContributions, "Your contribution exceeds the remaining amount needed to reach the goal");
             amount = allowance;
             p.ERCToken.transferFrom(msg.sender, address(this), amount);
         }
