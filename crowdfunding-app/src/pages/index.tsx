@@ -1,32 +1,52 @@
 import Head from 'next/head'
 import styles from '@/styles/Home.module.css'
 import Web3 from 'web3'
-//import cfContract from '../pages/crowdfunding'
+import cfContract from '../pages/crowdfunding'
 import 'bulma/css/bulma.css'
 import { useEffect, useState } from 'react'
 import ObjectList from '@/components/list'
+import { ethers } from 'ethers';
 
 const Home = () => {
 
-  const [error, setError] = useState('')
-  const [projectsCount, setProjectsCount] = useState('')
-  let web3
+  const [error, setError] = useState('');
+  const [projectsCount, setProjectsCount] = useState('');
+  let web3;
   const [projectsList, setProjectsList] = useState([
     { name: 'Project 1', description: 'Lorem Ipsum' },
     { name: 'Project 2', description: 'Lorem Ipsum' },
     { name: 'Project 3', description: 'Lorem Ipsum' },
-  ])
+  ]);
+  const [events, setEvents] = useState([]);
 
-  /*useEffect(() => {
-    getProjectsHandler()
-  })*/
+  useEffect(() => {
+    const fetchEvents = async () => {
+      getProjectsHandler();
+      const event = cfContract.events.ProjectCreated();
+
+      event.on('ProjectCreated', (projectId, name, goal, deadline, ERC20Token, event) => {
+        const newEvent = {
+          projectId: projectId.toNumber(),
+          name,
+          goal: goal.toString(),
+          deadline: deadline.toNumber(),
+          ERC20Token,
+          event: event.event,
+        };
+
+        setEvents((prevEvents) => [...prevEvents, newEvent]);
+      });
+    };
+
+    fetchEvents();
+  }, []);
 
   const connectWalletHandler = async () => {
     if (typeof window !== 'undefined' && typeof window.ethereum !== 'undefined') {
       try {
         await window.ethereum.request({ method: 'eth_requestAccounts' })
         web3 = new Web3(window.ethereum)
-      } catch (err) {
+      } catch (err: any) {
         setError(err.message)
       }
     } else {
@@ -35,10 +55,11 @@ const Home = () => {
     }
   }
 
-  /*const getProjectsHandler = () => {
-    const projectsCount = cfContract.methods.projectCount().call();
+  const getProjectsHandler = async () => {
+    //Get the Projects count
+    const projectsCount = await cfContract.methods.projectCount().call();
     setProjectsCount(projectsCount);
-  }*/
+  }
 
   return (
     <div className={styles.main}>
