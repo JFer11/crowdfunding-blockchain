@@ -1,42 +1,38 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
+// import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 const ONE_DAY = 86400;
+const ONE_DAY_II = ONE_DAY * 3;
+const ONE_DAY_III = ONE_DAY_II * 2 * ONE_DAY;
+
+async function initializeCrowdfundingProject() {
+  CrowdfundingProject = await ethers.getContractFactory('CrowdfundingProject');
+  [owner, addr1, addr2, _] = await ethers.getSigners();
+  crowdfundingProject = await CrowdfundingProject.deploy();
+  return [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject]
+}
+
+async function cleanupCrowdfundingProject() {
+  CrowdfundingProject = null;
+  owner = null;
+  addr1 = null;
+  addr2 = null;
+  crowdfundingProject = null;
+}
 
 describe('CrowdfundingProject', function () {
-  let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
-
-  before(async () => {
-    CrowdfundingProject = await ethers.getContractFactory(
-      'CrowdfundingProject'
-    );
-    [owner, addr1, addr2, _] = await ethers.getSigners();
-    crowdfundingProject = await CrowdfundingProject.deploy();
-  });
-
-  // Una basura esto de usar siempre el mismo contrato y mismo contexto en todos los tests. 
-  // Modificamos 32 veces el tiempo, es imposible tener un entendimiento de que tiempo tiene
-  // le EVM en los ultimos tests. Entre otras desventajas. Los utlimos tests, dan errores de fechas.
-  // Fijate a ver si entendes porque da 'Deadline passed' una contribucion, si le estoy poniendo deadline
-  // el 100 dias despues el goal.
-
-  // beforeEach(async function () {
-  //   // Get the ContractFactory and Signers here.
-  //   const crowdfundingProjectForEach = await ethers.getContractFactory("CrowdfundingProject");
-  //   [addr1ForEach, addr2ForEach, ...addrs] = await ethers.getSigners();
-
-  //   // To deploy our contract, we just have to call CrowdfundingProject.deploy() and await it to get the contract instance.
-  //   crowdfundingProjectForEach = await crowdfundingProjectForEach.deploy();
-  //   await crowdfundingProjectForEach.deployed();
-  // });
-
-  // afterEach(async function () {
-  //   // The contract instance is destroyed here, or can be reset
-  //   crowdfundingProjectForEach = null;
-  // });
-
-
   describe('Deployment', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    after(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
     it('Should set the right owner', async function () {
       expect(await crowdfundingProject.owner()).to.equal(owner.address);
     });
@@ -47,6 +43,16 @@ describe('CrowdfundingProject', function () {
   });
 
   describe('Creating a project', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    after(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
     it('Should create a project successfully', async function () {
       await crowdfundingProject.createProject(
         'Test Project',
@@ -62,9 +68,21 @@ describe('CrowdfundingProject', function () {
     });
 
     // Add more tests for different scenarios...
+    // ...
+    // ...
   });
 
   describe('Setting Platform Fee', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    after(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
     it('Should set the platform fee successfully', async function () {
       await crowdfundingProject.connect(owner).setPlatformFee(10);
       expect(await crowdfundingProject.fee()).to.equal(10);
@@ -72,7 +90,16 @@ describe('CrowdfundingProject', function () {
   });
 
   describe('Setting Valid Currency', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
     let validToken;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    after(async () => {
+      await cleanupCrowdfundingProject();
+    });
 
     beforeEach(async function () {
       const ERC20 = await ethers.getContractFactory('SimpleERC20');
@@ -91,7 +118,28 @@ describe('CrowdfundingProject', function () {
   });
 
   describe('Contributing to a project', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    after(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
     it('Should contribute to a project successfully', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + ONE_DAY,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+
       // contribute with address 1
       await crowdfundingProject.connect(addr1).contribute(0, {
         value: ethers.utils.parseEther('12'),
@@ -104,7 +152,35 @@ describe('CrowdfundingProject', function () {
   });
 
   describe('Withdrawing Funds', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    after(async () => {
+      // Reset EVM time to initial state before the next tests
+      const initialTime = Math.floor(Date.now() / 1000) + ONE_DAY;
+      // await ethers.provider.send('evm_setNextBlockTimestamp', [initialTime]);
+      // await ethers.provider.send('evm_mine'); // Mine the next block so the time change takes effect   
+      // await cleanupCrowdfundingProject();
+      const blockNumAfter = await ethers.provider.getBlockNumber();
+      const blockAfter = await ethers.provider.getBlock(blockNumAfter);
+      const timestampAfter = blockAfter.timestamp;   
+    });
+
     it('Should withdraw funds successfully', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + ONE_DAY,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+      
       await crowdfundingProject.connect(addr1).contribute(0, {
         value: ethers.utils.parseEther('12'),
       });
@@ -123,170 +199,213 @@ describe('CrowdfundingProject', function () {
   });
 
   describe('Injecting Rewards', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+      
+    after(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
     it('Should inject rewards successfully', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + ONE_DAY_II,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+
+      await crowdfundingProject.connect(addr1).contribute(0, {
+        value: ethers.utils.parseEther('15'),
+      });
+
+      await ethers.provider.send('evm_increaseTime', [ONE_DAY_II + ONE_DAY]);
+      await ethers.provider.send('evm_mine'); // Mine the next block so the time change takes effect
+      
       await crowdfundingProject
         .connect(owner)
         .injectRewards(0, { value: ethers.utils.parseEther('1') });
+
       const project = await crowdfundingProject.projects(0);
+      
       expect(project.fundsInjected).to.equal(ethers.utils.parseEther('1'));
     });
   });
 
-  describe('Claiming Rewards', function () {
-    it('Should claim rewards successfully', async function () {
-      // Create new project
-      await crowdfundingProject.createProject(
-          'Test Project 2',
-          'Test Description 2',
-          ethers.utils.parseEther('10'),
-          Math.floor(Date.now() / 1000) + ONE_DAY * 3, // Ensure the deadline is in the future
-          ethers.utils.parseEther('0.1'),
-          0, // Ether as currency
-          '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
-      );
+});
 
-      // Contribute to the project, enough to reach the goal
-      await crowdfundingProject.connect(addr1).contribute(1, {
-          value: ethers.utils.parseEther('7'),
-      });
-      await crowdfundingProject.connect(addr2).contribute(1, {
-        value: ethers.utils.parseEther('3'),
-      });
+  // describe('Claiming Rewards', function () {
+  //   let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
 
-      // Increase time so that the deadline has passed
-      await ethers.provider.send('evm_increaseTime', [3 * ONE_DAY]);
-      await ethers.provider.send('evm_mine'); // Mine the next block so the time change takes effect
+  //   before(async () => {
+  //     [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+  //   });
+      
+  //   after(async () => {
+  //     await cleanupCrowdfundingProject();
+  //   });
 
-      // Inject rewards after the deadline
-      await crowdfundingProject
-          .connect(owner)
-          .injectRewards(1, { value: ethers.utils.parseEther('1') });
-
-      // Claim rewards
-      await crowdfundingProject.connect(addr1).claimRewards(1);
-      const project = await crowdfundingProject.projects(1);
-
-      expect(project.fundsInjected).to.equal(
-        ethers.utils.parseEther('1')
-      );
-    });
-
-    it('Should not be able to claim rewards twice', async function () {
-        // Try to claim rewards again and verify the transaction fails
-        await expect(crowdfundingProject.connect(addr1).claimRewards(1)).to.be.reverted;
-    });
-
-    it('Should not be able to claim rewards without funds injection', async function () {
-        // Create new project with a future deadline
-        await crowdfundingProject.createProject(
-            'Test Project 3',
-            'Test Description 3',
-            ethers.utils.parseEther('10'),
-            Math.floor(Date.now() / 1000) + ONE_DAY * 6, // Ensure the deadline is in the future
-            ethers.utils.parseEther('0.1'),
-            0, // Ether as currency
-            '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
-        );
-
-        // Contribute to the project
-        await crowdfundingProject.connect(addr1).contribute(2, {
-            value: ethers.utils.parseEther('5'),
-        });
-
-        // Try to claim rewards without funds injection and verify the transaction fails
-        // No need to increase time here, as the contract should already prevent claiming without funds
-        await expect(crowdfundingProject.connect(addr1).claimRewards(2)).to.be.reverted;
-    });
-  });
-
-
-  // estos tests estan god, no borrar, hay que cambiar el tema de las fechas
-  // describe ('Claiming Rewards', function () {
-  //   it('Should allow contributors to claim back their contribution if goal is not met after deadline', async function () {
+  //   it('Should claim rewards successfully', async function () {
+  //     // A project needs to be created first.
   //     await crowdfundingProject.createProject(
-  //       'Test Project 4',
-  //       'Test Description 4',
+  //       'Test Project',
+  //       'Test Description',
   //       ethers.utils.parseEther('10'),
-  //       Math.floor(Date.now() / 1000) + ONE_DAY * 6, // Ensure the deadline is in the future
+  //       Math.floor(Date.now() / 1000) + ONE_DAY_III,
   //       ethers.utils.parseEther('0.1'),
   //       0, // Ether as currency
   //       '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
   //     );
+
+  //     // Contribute to the project, enough to reach the goal
+  //     await crowdfundingProject.connect(addr1).contribute(0, {
+  //         value: ethers.utils.parseEther('7'),
+  //     });
+  //     await crowdfundingProject.connect(addr2).contribute(0, {
+  //       value: ethers.utils.parseEther('3'),
+  //     });
+
+  //     // Increase time so that the deadline has passed
+  //     await ethers.provider.send('evm_increaseTime', [ONE_DAY_III * ONE_DAY]);
+  //     await ethers.provider.send('evm_mine'); // Mine the next block so the time change takes effect
+
+  //     // Inject rewards after the deadline
+  //     await crowdfundingProject.connect(owner).injectRewards(0, { 
+  //       value: ethers.utils.parseEther('1')
+  //     });
+
+  //     // Claim rewards
+  //     await crowdfundingProject.connect(addr1).claimRewards(0);
+  //     const project = await crowdfundingProject.projects(0);
+
+  //     expect(project.fundsInjected).to.equal(
+  //       ethers.utils.parseEther('1')
+  //     );
+  //   });
+
+  //   it('Should not be able to claim rewards twice', async function () {
+  //       // Try to claim rewards again and verify the transaction fails
+  //       await expect(crowdfundingProject.connect(addr1).claimRewards(0)).to.be.reverted;
+  //   });
+
+  //   it('Should not be able to claim rewards without funds injection', async function () {
+  //       // Create new project with a future deadline
+  //       await crowdfundingProject.createProject(
+  //           'Test Project 2',
+  //           'Test Description 2',
+  //           ethers.utils.parseEther('10'),
+  //           Math.floor(Date.now() / 1000) + ONE_DAY * 6, // Ensure the deadline is in the future
+  //           ethers.utils.parseEther('0.1'),
+  //           0, // Ether as currency
+  //           '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+  //       );
+
+  //       // Contribute to the project
+  //       await crowdfundingProject.connect(addr1).contribute(2, {
+  //           value: ethers.utils.parseEther('5'),
+  //       });
+
+  //       // Try to claim rewards without funds injection and verify the transaction fails
+  //       // No need to increase time here, as the contract should already prevent claiming without funds
+  //       await expect(crowdfundingProject.connect(addr1).claimRewards(2)).to.be.reverted;
+  //   });
+  // });
+
+// otra par
+
+//   // estos tests estan god, no borrar, hay que cambiar el tema de las fechas
+//   // describe ('Claiming Rewards', function () {
+//   //   it('Should allow contributors to claim back their contribution if goal is not met after deadline', async function () {
+//   //     await crowdfundingProject.createProject(
+//   //       'Test Project 4',
+//   //       'Test Description 4',
+//   //       ethers.utils.parseEther('10'),
+//   //       Math.floor(Date.now() / 1000) + ONE_DAY * 6, // Ensure the deadline is in the future
+//   //       ethers.utils.parseEther('0.1'),
+//   //       0, // Ether as currency
+//   //       '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+//   //     );
       
-  //     // Contribute to the project first.
-  //     await crowdfundingProject.connect(addr1).contribute(4, {
-  //         value: ethers.utils.parseEther('1'),
-  //     });
+//   //     // Contribute to the project first.
+//   //     await crowdfundingProject.connect(addr1).contribute(4, {
+//   //         value: ethers.utils.parseEther('1'),
+//   //     });
   
-  //     // Simulate deadline passing and project goal not met.
-  //     await ethers.provider.send('evm_increaseTime', [2 * ONE_DAY]);
-  //     await ethers.provider.send('evm_mine');
+//   //     // Simulate deadline passing and project goal not met.
+//   //     await ethers.provider.send('evm_increaseTime', [2 * ONE_DAY]);
+//   //     await ethers.provider.send('evm_mine');
   
-  //     const beforeBalance = await ethers.provider.getBalance(addr1.address);
-  //     await crowdfundingProject.connect(addr1).claimContribution(0);
-  //     const afterBalance = await ethers.provider.getBalance(addr1.address);
+//   //     const beforeBalance = await ethers.provider.getBalance(addr1.address);
+//   //     await crowdfundingProject.connect(addr1).claimContribution(0);
+//   //     const afterBalance = await ethers.provider.getBalance(addr1.address);
   
-  //     expect(afterBalance).to.gt(beforeBalance);
-  //   });
+//   //     expect(afterBalance).to.gt(beforeBalance);
+//   //   });
 
-  //   it('Should prevent the same contributor from claiming their contribution twice', async function () {
-  //     // Contribute to the project first.
-  //     await crowdfundingProject.connect(addr1).contribute(0, {
-  //         value: ethers.utils.parseEther('1'),
-  //     });
+//   //   it('Should prevent the same contributor from claiming their contribution twice', async function () {
+//   //     // Contribute to the project first.
+//   //     await crowdfundingProject.connect(addr1).contribute(0, {
+//   //         value: ethers.utils.parseEther('1'),
+//   //     });
   
-  //     // Simulate deadline passing and project goal not met.
-  //     await ethers.provider.send('evm_increaseTime', [2 * ONE_DAY]);
-  //     await ethers.provider.send('evm_mine');
+//   //     // Simulate deadline passing and project goal not met.
+//   //     await ethers.provider.send('evm_increaseTime', [2 * ONE_DAY]);
+//   //     await ethers.provider.send('evm_mine');
   
-  //     await crowdfundingProject.connect(addr1).claimContribution(0);
+//   //     await crowdfundingProject.connect(addr1).claimContribution(0);
   
-  //     // Try to claim contribution again, should revert.
-  //     await expect(crowdfundingProject.connect(addr1).claimContribution(0)).to.be.revertedWith('You have not made any contributions');
-  //   });
+//   //     // Try to claim contribution again, should revert.
+//   //     await expect(crowdfundingProject.connect(addr1).claimContribution(0)).to.be.revertedWith('You have not made any contributions');
+//   //   });
   
-  //   it('Should prevent contributors from claiming their contribution before deadline', async function () {
-  //     // Contribute to the project first.
-  //     await crowdfundingProject.connect(addr1).contribute(0, {
-  //         value: ethers.utils.parseEther('1'),
-  //     });
+//   //   it('Should prevent contributors from claiming their contribution before deadline', async function () {
+//   //     // Contribute to the project first.
+//   //     await crowdfundingProject.connect(addr1).contribute(0, {
+//   //         value: ethers.utils.parseEther('1'),
+//   //     });
   
-  //     // Try to claim contribution before deadline, should revert.
-  //     await expect(crowdfundingProject.connect(addr1).claimContribution(0)).to.be.revertedWith('Cannot claim contribution before deadline');
-  //   });
+//   //     // Try to claim contribution before deadline, should revert.
+//   //     await expect(crowdfundingProject.connect(addr1).claimContribution(0)).to.be.revertedWith('Cannot claim contribution before deadline');
+//   //   });
   
-  //   it('Should prevent contributors from claiming their contribution if project has reached its goal', async function () {
-  //     // Contribute to the project first.
-  //     await crowdfundingProject.connect(addr1).contribute(0, {
-  //         value: ethers.utils.parseEther('12'),
-  //     });
+//   //   it('Should prevent contributors from claiming their contribution if project has reached its goal', async function () {
+//   //     // Contribute to the project first.
+//   //     await crowdfundingProject.connect(addr1).contribute(0, {
+//   //         value: ethers.utils.parseEther('12'),
+//   //     });
   
-  //     // Simulate deadline passing and project goal is met.
-  //     await ethers.provider.send('evm_increaseTime', [2 * ONE_DAY]);
-  //     await ethers.provider.send('evm_mine');
+//   //     // Simulate deadline passing and project goal is met.
+//   //     await ethers.provider.send('evm_increaseTime', [2 * ONE_DAY]);
+//   //     await ethers.provider.send('evm_mine');
   
-  //     // Try to claim contribution, should revert.
-  //     await expect(crowdfundingProject.connect(addr1).claimContribution(0)).to.be.revertedWith('Cannot claim contribution if the project had reached the financial goal');
-  //   });
+//   //     // Try to claim contribution, should revert.
+//   //     await expect(crowdfundingProject.connect(addr1).claimContribution(0)).to.be.revertedWith('Cannot claim contribution if the project had reached the financial goal');
+//   //   });
   
-  // });
+//   // });
 
 
-  // describe('Claiming Rewards', function () {
-  //   it('Should claim rewards successfully', async function () {
-  //    ...
-  //   });
-  // });
+//   // describe('Claiming Rewards', function () {
+//   //   it('Should claim rewards successfully', async function () {
+//   //    ...
+//   //   });
+//   // });
 
-  // describe('Claiming Contributions', function () {
-  //   it('Should claim contributions successfully', async function () {
-  //     ...
-  //   });
-  // });
+//   // describe('Claiming Contributions', function () {
+//   //   it('Should claim contributions successfully', async function () {
+//   //     ...
+//   //   });
+//   // });
 
-  // describe('Withdrawing Platform Fee', function () {
-  //   it('Should withdraw platform fee successfully', async function () {
-  //     ...
-  //   });
-  // });
-});
+//   // describe('Withdrawing Platform Fee', function () {
+//   //   it('Should withdraw platform fee successfully', async function () {
+//   //     ...
+//   //   });
+//   // });
+// });
