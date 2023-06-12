@@ -3,9 +3,10 @@ pragma solidity ^0.8.0;
 
 import "../node_modules/@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "../node_modules/@openzeppelin/contracts/access/Ownable.sol";
+import "../node_modules/@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 
-contract CrowdfundingProject is Ownable {
+contract CrowdfundingProject is Ownable, ReentrancyGuard {
     enum CurrencyType { ETHER, ERC20 }
     struct Project {
         string name;
@@ -83,7 +84,7 @@ contract CrowdfundingProject is Ownable {
         emit ProjectCreated(projectCount, _name, _goal, _deadline, _ERCToken);
     }
 
-    function contribute(uint256 _projectId) public payable validateProjectExistance(_projectId) {
+    function contribute(uint256 _projectId) public payable validateProjectExistance(_projectId) nonReentrant {
         Project storage p = projects[_projectId];
         require(!p.fundsWithdrawn, "The project funds have already been withdrawn");
         require(block.timestamp < p.deadline, "Deadline passed");
@@ -105,7 +106,7 @@ contract CrowdfundingProject is Ownable {
         }
     }
 
-    function withdrawFunds(uint256 _projectId) public validateProjectExistance(_projectId) onlyProjectOwner(_projectId) {
+    function withdrawFunds(uint256 _projectId) public validateProjectExistance(_projectId) onlyProjectOwner(_projectId) nonReentrant {
         Project storage p = projects[_projectId];
         require(!p.fundsWithdrawn, "The project funds have already been withdrawn");
         require(block.timestamp >= p.deadline, "Cannot withdraw before deadline");
@@ -126,7 +127,7 @@ contract CrowdfundingProject is Ownable {
         emit FundsClaimed(_projectId, msg.sender, amount);
     }
 
-    function injectRewards(uint256 _projectId) public payable validateProjectExistance(_projectId) onlyProjectOwner(_projectId) {
+    function injectRewards(uint256 _projectId) public payable validateProjectExistance(_projectId) onlyProjectOwner(_projectId) nonReentrant {
         Project storage p = projects[_projectId];
         require(block.timestamp >= p.deadline, "Cannot inject funds before deadline");
         require(p.totalContributions >= p.goal, "Cannot inject funds before reaching goal");
@@ -145,7 +146,7 @@ contract CrowdfundingProject is Ownable {
         p.fundsInjected += amount;
     }
 
-    function claimRewards(uint256 _projectId) public validateProjectExistance(_projectId) {
+    function claimRewards(uint256 _projectId) public validateProjectExistance(_projectId) nonReentrant {
         Project storage p = projects[_projectId];
         require(block.timestamp >= p.deadline, "Cannot claim rewards before deadline");
         require(p.totalContributions >= p.goal, "Cannot claim rewards before reaching goal");
@@ -166,7 +167,7 @@ contract CrowdfundingProject is Ownable {
         emit RewardClaimed(_projectId, msg.sender, reward);
     }
 
-    function claimContribution(uint256 _projectId) public validateProjectExistance(_projectId) {
+    function claimContribution(uint256 _projectId) public validateProjectExistance(_projectId) nonReentrant {
         Project storage p = projects[_projectId];
         require(block.timestamp >= p.deadline, "Cannot claim contribution before deadline");
         require(p.totalContributions < p.goal, "Cannot claim contribution if the project had reached the financial goal");
@@ -185,7 +186,7 @@ contract CrowdfundingProject is Ownable {
         emit ContributionClaimed(_projectId, msg.sender, amount);
     }
 
-    function withdrawPlatformFee(CurrencyType _currencyType, IERC20 _ERCToken) external onlyOwner {
+    function withdrawPlatformFee(CurrencyType _currencyType, IERC20 _ERCToken) external onlyOwner nonReentrant {
         require(_currencyType == CurrencyType.ETHER || validERC20Tokens[_ERCToken], "Invalid currency. Only Ether or supported ERC20 tokens are accepted");
         uint256 amount;
         if (_currencyType == CurrencyType.ETHER) {
