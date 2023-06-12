@@ -43,7 +43,7 @@ contract CrowdfundingProject is Ownable {
     }
 
     modifier validateProjectExistance(uint256 _projectId) {
-        require(_projectId >= 0 && _projectId <= projectCount, "Invalid project ID");
+        require(_projectId >= 0 && _projectId <= projectCount -1, "Invalid project ID");
         _;
     }
 
