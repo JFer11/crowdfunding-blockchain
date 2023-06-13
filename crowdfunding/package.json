@@ -28,6 +28,6 @@
     "solidity-coverage": "^0.8.2"
   },
   "dependencies": {
-    "@nomiclabs/hardhat-truffle5": "^2.0.7"
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.8"
   }
 }
