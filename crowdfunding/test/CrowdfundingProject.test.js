@@ -1,26 +1,30 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
 
+
 const ONE_DAY = 86400;
-const DATE_I = ONE_DAY * 3;
-const DATE_II = ONE_DAY * 4;
-const DATE_III = ONE_DAY * 5;
-const DATE_IV = ONE_DAY * 6;
-const DATE_V = ONE_DAY * 7;
-const DATE_VI = ONE_DAY * 8;
-const DATE_VII = ONE_DAY * 9;
-const DATE_VIII = ONE_DAY * 10;
-const DATE_IX = ONE_DAY * 11;
-const DATE_X = ONE_DAY * 12;
-const DATE_XI = ONE_DAY * 13;
-const DATE_XII = ONE_DAY * 14;
-const DATE_XIII = ONE_DAY * 15;
-const DATE_XIV = ONE_DAY * 16;
-const DATE_XV = ONE_DAY * 17;
-const DATE_XVI = ONE_DAY * 18;
-const DATE_XVII = ONE_DAY * 19;
-const DATE_XVIII = ONE_DAY * 20;
-const DATE_XIX = ONE_DAY * 21;
+function days(n) {
+  return ONE_DAY * n;
+}
+const DATE_I = days(3);    // 259200
+const DATE_II = days(4);   // 345600
+const DATE_III = days(5);  // 432000
+const DATE_IV = days(6);   // 518400
+const DATE_V = days(7);    // 604800
+const DATE_VI = days(8);   // 691200
+const DATE_VII = days(9);  // 777600
+const DATE_VIII = days(10); // 864000
+const DATE_IX = days(11);   // 950400
+const DATE_X = days(12);    // 1036800
+const DATE_XI = days(13);   // 1123200
+const DATE_XII = days(14);  // 1209600
+const DATE_XIII = days(15); // 1296000
+const DATE_XIV = days(16);  // 1382400
+const DATE_XV = days(17);   // 1468800
+const DATE_XVI = days(18);  // 1555200
+const DATE_XVII = days(19); // 1641600
+const DATE_XVIII = days(20); // 1728000
+const DATE_XIX = days(21);  // 1814400
 
 
 async function initializeCrowdfundingProject() {
@@ -56,6 +60,35 @@ describe('CrowdfundingProject', function () {
 
     it('Should set the platform fee to default', async function () {
       expect(await crowdfundingProject.fee()).to.equal(5);
+    });
+  });
+
+  describe('Setting Platform Fee', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    before(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    after(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
+    it('Should set the platform fee successfully', async function () {
+      await crowdfundingProject.connect(owner).setPlatformFee(10);
+      expect(await crowdfundingProject.fee()).to.equal(10);
+    });
+
+    it('Should not allow non-owner to set the platform fee', async function () {
+      await expect(crowdfundingProject.connect(addr1).setPlatformFee(10)).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+  
+    it('Should not allow setting a fee of less than or equal to 0', async function () {
+      await expect(crowdfundingProject.connect(owner).setPlatformFee(0)).to.be.revertedWith("Fee should be a percentage, between 0 and 100");
+    });
+  
+    it('Should not allow setting a fee of greater than or equal to 100', async function () {
+      await expect(crowdfundingProject.connect(owner).setPlatformFee(100)).to.be.revertedWith("Fee should be a percentage, between 0 and 100");
     });
   });
 
@@ -155,50 +188,47 @@ describe('CrowdfundingProject', function () {
     });    
   });
 
-  describe('Setting Platform Fee', function () {
-    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
-
-    before(async () => {
-      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
-    });
-  
-    after(async () => {
-      await cleanupCrowdfundingProject();
-    });
-
-    it('Should set the platform fee successfully', async function () {
-      await crowdfundingProject.connect(owner).setPlatformFee(10);
-      expect(await crowdfundingProject.fee()).to.equal(10);
-    });
-  });
-
   describe('Setting Valid Currency', function () {
     let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
     let validToken;
-
-    before(async () => {
-      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
-    });
   
-    after(async () => {
-      await cleanupCrowdfundingProject();
-    });
-
-    beforeEach(async function () {
+    beforeEach(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+  
       const ERC20 = await ethers.getContractFactory('SimpleERC20');
       validToken = await ERC20.deploy(ethers.utils.parseEther('10000'));
       await validToken.deployed();
     });
-
-    it('Should set valid currency successfully', async function () {
-      await crowdfundingProject
-        .connect(owner)
-        .setValidCurrency(validToken.address, true);
-      expect(
-        await crowdfundingProject.validERC20Tokens(validToken.address)
-      ).to.equal(true);
+  
+    afterEach(async () => {
+      await cleanupCrowdfundingProject();
     });
-  });
+  
+    it('Should set valid currency successfully', async function () {
+      await expect(crowdfundingProject.connect(owner).setValidCurrency(validToken.address, true))
+        .to.emit(crowdfundingProject, 'ValidERC20TokenSet')
+        .withArgs(validToken.address, true);
+  
+      expect(await crowdfundingProject.validERC20Tokens(validToken.address)).to.equal(true);
+    });
+  
+    it('Should not allow non-owner to set valid currency', async function () {
+      await expect(crowdfundingProject.connect(addr1).setValidCurrency(validToken.address, true)).to.be.revertedWith("Ownable: caller is not the owner");
+    });
+  
+    it('Should remove valid currency successfully', async function () {
+      // Set as valid first
+      await crowdfundingProject.connect(owner).setValidCurrency(validToken.address, true);
+      expect(await crowdfundingProject.validERC20Tokens(validToken.address)).to.equal(true);
+  
+      // Then remove it
+      await expect(crowdfundingProject.connect(owner).setValidCurrency(validToken.address, false))
+        .to.emit(crowdfundingProject, 'ValidERC20TokenSet')
+        .withArgs(validToken.address, false);
+  
+      expect(await crowdfundingProject.validERC20Tokens(validToken.address)).to.equal(false);
+    });
+  });  
 
   describe('Contributing to a project', function () {
     let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
