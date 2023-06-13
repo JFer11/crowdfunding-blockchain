@@ -1,6 +1,5 @@
 const { expect } = require('chai');
 const { ethers } = require('hardhat');
-// import { time } from "@nomicfoundation/hardhat-network-helpers";
 
 const ONE_DAY = 86400;
 const DATE_I = ONE_DAY * 3;
@@ -11,6 +10,11 @@ const DATE_V = ONE_DAY * 7;
 const DATE_VI = ONE_DAY * 8;
 const DATE_VII = ONE_DAY * 9;
 const DATE_VIII = ONE_DAY * 10;
+const DATE_IX = ONE_DAY * 11;
+const DATE_X = ONE_DAY * 12;
+const DATE_XI = ONE_DAY * 13;
+const DATE_XII = ONE_DAY * 14;
+const DATE_XIII = ONE_DAY * 15;
 
 
 async function initializeCrowdfundingProject() {
@@ -224,7 +228,7 @@ describe('CrowdfundingProject', function () {
     });
   });
 
-  describe('Withdrawing Funds', function () {
+  describe('Withdrawing Funds- Part 1', function () {
     let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
 
     before(async () => {
@@ -264,7 +268,7 @@ describe('CrowdfundingProject', function () {
     });
   });
 
-  describe('Injecting Rewards', function () {
+  describe('Injecting Rewards - Part 1', function () {
     let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
 
     before(async () => {
@@ -304,8 +308,7 @@ describe('CrowdfundingProject', function () {
     });
   });
 
-
-  describe('Claiming Rewards', function () {
+  describe('Claiming Rewards - Part 1', function () {
     let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
 
     before(async () => {
@@ -486,7 +489,7 @@ describe('CrowdfundingProject', function () {
           value: ethers.utils.parseEther('12'),
       });
   
-      // Simulate deadline passing and project goal is met.
+      
       await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
       await ethers.provider.send('evm_mine');
   
@@ -511,7 +514,7 @@ describe('CrowdfundingProject', function () {
         value: ethers.utils.parseEther('12'),
       });
 
-      // Simulate deadline passing and project goal is met.
+      
       await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
       await ethers.provider.send('evm_mine');
 
@@ -535,7 +538,7 @@ describe('CrowdfundingProject', function () {
         '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
       );
 
-      // Simulate deadline passing and project goal is met.
+      
       await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
       await ethers.provider.send('evm_mine');
     
@@ -590,6 +593,292 @@ describe('CrowdfundingProject', function () {
       const projectId = 0;
       await expect(crowdfundingProject.connect(addr1).contribute(projectId)).to.be.revertedWith("Minimum contribution not met");
     });
-    
   });
+
+  describe('Withdrawing Funds - Part 2', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    beforeEach(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+  
+    afterEach(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
+    it('Should fail to withdraw funds when the project goal is not reached', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_VIII,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+      
+      // contribute with address 1
+      await crowdfundingProject.connect(addr1).contribute(0, {
+        value: ethers.utils.parseEther('1'),
+      });
+
+      await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
+      await ethers.provider.send('evm_mine');
+
+      await expect(crowdfundingProject.connect(owner).withdrawFunds(0)).to.be.revertedWith("Cannot withdraw before reaching goal");
+    });
+
+    it('Should fail to withdraw funds before the deadline', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_IX,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+
+      // contribute with address 1
+      await crowdfundingProject.connect(addr1).contribute(0, {
+        value: ethers.utils.parseEther('1'),
+      });
+
+      await expect(crowdfundingProject.connect(owner).withdrawFunds(0)).to.be.revertedWith("Cannot withdraw before deadline");
+    });
+    
+    it('Should withdraw funds successfully for a project with ERC20 as currency', async function () {
+      // Deploying the SimpleERC20 contract with an initial supply
+      const ERC20 = await ethers.getContractFactory('SimpleERC20');
+      const validToken = await ERC20.deploy(ethers.utils.parseEther('10000'));
+      await validToken.deployed();
+    
+      // Setting the token as valid currency for the project
+      await crowdfundingProject.setValidCurrency(validToken.address, true);
+    
+      // Creating a new project
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_IX,
+        ethers.utils.parseEther('0.1'),
+        1, // ERC20 as currencyType
+        validToken.address // Valid ERC20 token address
+      );
+    
+      // Transferring some tokens to addr1 and contribute
+      await validToken.transfer(addr1.address, ethers.utils.parseEther('12'));
+      await validToken.connect(addr1).approve(crowdfundingProject.address, ethers.utils.parseEther('12'));
+      await crowdfundingProject.connect(addr1).contribute(0);
+    
+      await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
+      await ethers.provider.send('evm_mine'); 
+    
+      await crowdfundingProject.connect(owner).withdrawFunds(0);
+      const project = await crowdfundingProject.projects(0);
+    
+      expect(project.fundsWithdrawn).to.equal(true);
+    });
+  });
+
+  describe('Injecting Rewards - Part 2', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+
+    beforeEach(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+      
+    afterEach(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
+    it('Should inject rewards successfully for a project with ERC20 as currency', async function () {
+      // Deploying the SimpleERC20 contract with an initial supply
+      const ERC20 = await ethers.getContractFactory('SimpleERC20');
+      const validToken = await ERC20.deploy(ethers.utils.parseEther('10000'));
+      await validToken.deployed();
+    
+      // Setting the token as valid currency for the project
+      await crowdfundingProject.setValidCurrency(validToken.address, true);
+    
+      // Creating a new project
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_X,
+        ethers.utils.parseEther('0.1'),
+        1, // ERC20 as currencyType
+        validToken.address // Valid ERC20 token address
+      );
+    
+      // Transferring some tokens to addr1 and contribute
+      await validToken.transfer(addr1.address, ethers.utils.parseEther('15'));
+      await validToken.connect(addr1).approve(crowdfundingProject.address, ethers.utils.parseEther('15'));
+      await crowdfundingProject.connect(addr1).contribute(0);
+    
+      await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
+      await ethers.provider.send('evm_mine'); 
+    
+      // Transfer some tokens to owner for injecting rewards
+      await validToken.transfer(owner.address, ethers.utils.parseEther('1'));
+      await validToken.connect(owner).approve(crowdfundingProject.address, ethers.utils.parseEther('1'));
+      
+      // Inject rewards
+      await crowdfundingProject.connect(owner).injectRewards(0);
+    
+      const project = await crowdfundingProject.projects(0);
+    
+      expect(project.fundsInjected).to.equal(ethers.utils.parseEther('1'));
+    });
+
+    it('Should fail to inject rewards before the deadline', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_XI,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+      
+      // contribute with address 1
+      await crowdfundingProject.connect(addr1).contribute(0, {
+        value: ethers.utils.parseEther('10'),
+      });
+    
+      await expect(crowdfundingProject.connect(owner).injectRewards(0)).to.be.revertedWith("Cannot inject funds before deadline");
+    });
+    
+    it('Should fail to inject rewards when the project goal is not reached', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_XI,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+
+      // contribute with address 1
+      await crowdfundingProject.connect(addr1).contribute(0, {
+        value: ethers.utils.parseEther('1'),
+      });
+    
+      await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
+      await ethers.provider.send('evm_mine'); 
+    
+      await expect(crowdfundingProject.connect(owner).injectRewards(0)).to.be.revertedWith("Cannot inject funds before reaching goal");
+    });
+  });
+
+  describe('Claiming Rewards - Part 2', function () {
+    let CrowdfundingProject, crowdfundingProject, owner, addr1, addr2;
+    
+    beforeEach(async () => {
+      [CrowdfundingProject, owner, addr1, addr2, crowdfundingProject] = await initializeCrowdfundingProject();
+    });
+      
+    afterEach(async () => {
+      await cleanupCrowdfundingProject();
+    });
+
+    it('Should claim rewards successfully for a project with ERC20 as currency', async function () {
+      // Deploying the SimpleERC20 contract with an initial supply
+      const ERC20 = await ethers.getContractFactory('SimpleERC20');
+      const validToken = await ERC20.deploy(ethers.utils.parseEther('10000'));
+      await validToken.deployed();
+    
+      // Setting the token as valid currency for the project
+      await crowdfundingProject.setValidCurrency(validToken.address, true);
+    
+      // Creating a new project
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_XII,
+        ethers.utils.parseEther('0.1'),
+        1, // ERC20 as currencyType
+        validToken.address // Valid ERC20 token address
+      );
+    
+      // Transfer some tokens to addr1 and addr2 and they contribute
+      await validToken.transfer(addr1.address, ethers.utils.parseEther('7'));
+      await validToken.transfer(addr2.address, ethers.utils.parseEther('3'));
+      await validToken.connect(addr1).approve(crowdfundingProject.address, ethers.utils.parseEther('7'));
+      await validToken.connect(addr2).approve(crowdfundingProject.address, ethers.utils.parseEther('3'));
+      await crowdfundingProject.connect(addr1).contribute(0);
+      await crowdfundingProject.connect(addr2).contribute(0);
+    
+      await ethers.provider.send('evm_increaseTime', [ONE_DAY]);
+      await ethers.provider.send('evm_mine'); 
+    
+      // Transfer some tokens to owner for injecting rewards
+      await validToken.transfer(owner.address, ethers.utils.parseEther('1'));
+      await validToken.connect(owner).approve(crowdfundingProject.address, ethers.utils.parseEther('1'));
+      
+      // Inject rewards
+      await crowdfundingProject.connect(owner).injectRewards(0);
+    
+      // Claim rewards
+      await crowdfundingProject.connect(addr1).claimRewards(0);
+      const project = await crowdfundingProject.projects(0);
+    
+      expect(project.fundsInjected).to.equal(ethers.utils.parseEther('1'));
+    });
+    
+    it('Should fail to claim rewards before the deadline', async function () {
+      // A project needs to be created first.
+      await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_XIII,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+
+      // contribute with address 1
+      await crowdfundingProject.connect(addr1).contribute(0, {
+        value: ethers.utils.parseEther('10'),
+      });
+    
+      await expect(crowdfundingProject.connect(addr1).claimRewards(0)).to.be.revertedWith("Cannot claim rewards before deadline");
+    });
+    
+    it('Should fail to claim rewards when the project goal is not reached', async function () {
+        // A project needs to be created first.
+        await crowdfundingProject.createProject(
+        'Test Project',
+        'Test Description',
+        ethers.utils.parseEther('10'),
+        Math.floor(Date.now() / 1000) + DATE_XIII,
+        ethers.utils.parseEther('0.1'),
+        0, // Ether as currency
+        '0x0000000000000000000000000000000000000000' // Dummy ERC20 token address
+      );
+
+      // contribute with address 1
+      await crowdfundingProject.connect(addr1).contribute(0, {
+        value: ethers.utils.parseEther('5'),
+      });
+    
+      await ethers.provider.send('evm_increaseTime', [ONE_DAY + ONE_DAY]);
+      await ethers.provider.send('evm_mine'); 
+    
+      await expect(crowdfundingProject.connect(addr1).claimRewards(0)).to.be.revertedWith("Cannot claim rewards before reaching goal");
+    });      
+  });
+
+  
+
 });
