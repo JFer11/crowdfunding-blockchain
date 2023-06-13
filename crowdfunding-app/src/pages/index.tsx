@@ -109,7 +109,7 @@ const Home = () => {
         </div>
       </nav>
       <section>
-        {ownerAddress.toString() == walletAddress.toString() ?
+        {ownerAddress.toString().toLowerCase() == walletAddress.toString().toLowerCase() ?
           <div className='container mt-4'>
             <Admin projectsList={projectsList} projectsCount={projectsCount} />
           </div>

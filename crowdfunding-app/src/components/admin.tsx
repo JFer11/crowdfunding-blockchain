@@ -10,9 +10,20 @@ const Admin = ({ projectsList, projectsCount }) => {
     const [walletAddress, setWallet] = useState('');
     const [comisionFee, setComisionFee] = useState('');
     const [newTokenAddress, setNewTokenAddress] = useState('');
-    const [acceptedTokens, setAcceptedTokens] = useState([]);
+    const [acceptedTokens, setAcceptedTokens] = useState<any>([]);
+
+    //Modals booleans
     const [showFeeModal, setShowFeeModal] = useState(false);
     const [showTokenModal, setShowTokenModal] = useState(false);
+    const [showRetrieveModal, setShowRetrieveModal] = useState(false);
+
+    //Retrieve variables
+    const [tokenRetrieve, setTokenRetrieve] = useState('')
+    const [selectedToken, setSelectedToken] = useState('ETH');
+
+    const handleOptionChange = (event) => {
+        setSelectedToken(event.target.value);
+    };
 
     useEffect(() => {
         getComisionFeeHandler();
@@ -51,7 +62,7 @@ const Admin = ({ projectsList, projectsCount }) => {
         setComisionFee(fee);
     }
 
-    const handleTabChange = (tabName) => {
+    const handleTabChange = (tabName: any) => {
         if (tabName == 'configurations') {
             setShowConfig(true);
         } else {
@@ -73,6 +84,14 @@ const Admin = ({ projectsList, projectsCount }) => {
 
     const hideTokenModal = () => {
         setShowTokenModal(false);
+    }
+
+    const retrieveHandler = () => {
+        setShowRetrieveModal(true);
+    }
+
+    const hideRetrieveModal = () => {
+        setShowRetrieveModal(false);
     }
 
     const changeComisionFeeHandler = async () => {
@@ -97,10 +116,22 @@ const Admin = ({ projectsList, projectsCount }) => {
             const newArray = [...acceptedTokens, response.events.ValidERC20TokenSet];
             setAcceptedTokens(newArray);
             setNewTokenAddress('');
-
-            // Show a success message or perform any other actions
             alert('New token successfully validated!');
             hideTokenModal();
+        } catch (err: any) {
+            alert(err)
+        }
+    }
+
+    const withdrawPlatformFeeHandler = async () => {
+        try {
+            if (selectedToken === 'ETH') {
+                const result = await cfContract.methods.createProject(0, '0x0000000000000000000000000000000000000000').send({ from: walletAddress });
+            } else {
+                const result = await cfContract.methods.createProject(1, tokenRetrieve).send({ from: walletAddress });
+            }
+            alert('Platform fees retrieved successfully!');
+            hideRetrieveModal();
         } catch (err: any) {
             alert(err)
         }
@@ -127,12 +158,15 @@ const Admin = ({ projectsList, projectsCount }) => {
                             Accepted Tokens:
                             <ul>
                                 {acceptedTokens.map((token: any, index: any) => (
-                                    <li>{token.returnValues.ERC20Token}</li>
+                                    <li key={token.returnValues.address}>{token.returnValues.ERC20Token}</li>
                                 ))}
                             </ul>
                         </div>
                         <div className="column">
                             <button onClick={newTokenHandler} className="button is-link">Add New</button>
+                        </div>
+                        <div className="column">
+                            <button onClick={retrieveHandler} className="button is-link">Retrieve Platform Fees</button>
                         </div>
                     </div>
                     <div className={showFeeModal ? 'modal is-active' : 'modal'}>
@@ -160,7 +194,7 @@ const Admin = ({ projectsList, projectsCount }) => {
                         <div className="modal-background"></div>
                         <div className="modal-card">
                             <header className="modal-card-head">
-                                <p className="modal-card-title">Change contribution fee</p>
+                                <p className="modal-card-title">Add new accepted Token</p>
                                 <button onClick={hideTokenModal} className="delete" aria-label="close"></button>
                             </header>
                             <section className="modal-card-body">
@@ -174,6 +208,45 @@ const Admin = ({ projectsList, projectsCount }) => {
                             <footer className="modal-card-foot">
                                 <button onClick={addNewTokenHandler} className="button is-success">Save</button>
                                 <button onClick={hideTokenModal} className="button">Cancel</button>
+                            </footer>
+                        </div>
+                    </div>
+                    <div className={showRetrieveModal ? 'modal is-active' : 'modal'}>
+                        <div className="modal-background"></div>
+                        <div className="modal-card">
+                            <header className="modal-card-head">
+                                <p className="modal-card-title">Retrieve Platform Fee</p>
+                                <button onClick={hideRetrieveModal} className="delete" aria-label="close"></button>
+                            </header>
+                            <section className="modal-card-body">
+                                <div className="field">
+                                    <div className="control">
+                                        <label className="radio">
+                                            <input type="radio" name="question" value="ETH" checked={selectedToken === 'ETH'} onChange={handleOptionChange} />
+                                            ETH
+                                        </label>
+                                        <label className="radio">
+                                            <input type="radio" name="question" value="ERC Token" checked={selectedToken === 'ERC Token'} onChange={handleOptionChange} />
+                                            ERC Token
+                                        </label>
+                                    </div>
+                                </div>
+                                <div className="field">
+                                    <label className="label">Token to Retrieve</label>
+                                    <div className="control">
+                                        <div className="select">
+                                            <select value={tokenRetrieve} onChange={(e) => setTokenRetrieve(e.target.value)}>
+                                                {acceptedTokens.map((token: any, index: any) => (
+                                                    <option key={token.returnValues.address}>{token.returnValues.ERC20Token}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+                            <footer className="modal-card-foot">
+                                <button onClick={withdrawPlatformFeeHandler} className="button is-success">Save</button>
+                                <button onClick={hideRetrieveModal} className="button">Cancel</button>
                             </footer>
                         </div>
                     </div>

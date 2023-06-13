@@ -9,7 +9,7 @@ const ObjectList = ({ projectsList, projectsCount }) => {
     const [showList, setShowList] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [projects, setProjects] = useState<any[]>([]);
-    const [acceptedTokens, setAcceptedTokens] = useState([]);
+    const [acceptedTokens, setAcceptedTokens] = useState<any[]>([]);
     const [ownedProjects, setOwnedProjects] = useState<any[]>([]);
 
     //Create contract variables
@@ -19,6 +19,7 @@ const ObjectList = ({ projectsList, projectsCount }) => {
     const [deadline, setDeadline] = useState('');
     const [minimumContribution, setMinimumContribution] = useState('');
     const [tokenAddress, setTokenAddress] = useState('');
+    const [selectedToken, setSelectedToken] = useState('ETH');
 
     //Contribute variables
     const [showModal, setShowModal] = useState(false);
@@ -26,15 +27,26 @@ const ObjectList = ({ projectsList, projectsCount }) => {
     const [projectToContributeId, setProjectToContributeId] = useState('');
     const [contributionAmount, setContributionAmount] = useState('');
 
+    //Contributions variables
+    const [contributions, setContributions] = useState<any[]>([]);
+    const [claimedContributions, setClaimedContributions] = useState<any[]>([]);
+    const [currentAddressContributions, setCurrentAddressContributions] = useState<any[]>([]);
+
     //Injection variables
     const [isInjection, setIsInjection] = useState(false);
 
     useEffect(() => {
         fetchEvents();
         fetchAcceptedTokens();
-        const address = getCurrentWalletConnected();
-        setProjects(projectsList);
-        //getOwnedProjectsByAddress();
+        getCurrentWalletConnected();
+        const newArray = projectsList.map(project => {
+            return { ...project, deadlineDate: new Date(project.returnValues.deadline * 1000) };
+        });
+        setProjects(newArray);
+        getContributionsHandler();
+        getContributionsClaimedHandler();
+        console.log(claimedContributions)
+        getContributedProjectsByAddress();
     }, []);
 
     useEffect(() => {
@@ -44,10 +56,22 @@ const ObjectList = ({ projectsList, projectsCount }) => {
     const fetchEvents = async () => {
         const event = cfContract.events.ProjectCreated();
         event.on('data', function (event: any) {
-            console.log(event);
+            //console.log(event);
             const newArray = [...projects, event];
             setProjects(newArray);
         });
+    }
+
+    const getContributionsHandler = async () => {
+        //Get all the contributions
+        const results = await cfContract.getPastEvents('ContributionAdded', { fromBlock: 0, toBlock: 'latest' });
+        setContributions(results);
+    }
+
+    const getContributionsClaimedHandler = async () => {
+        //Get all the contributions
+        const results = await cfContract.getPastEvents('ContributionClaimed', { fromBlock: 0, toBlock: 'latest' });
+        setClaimedContributions(results);
     }
 
     const fetchAcceptedTokens = async () => {
@@ -88,31 +112,30 @@ const ObjectList = ({ projectsList, projectsCount }) => {
         var auxArray = [];
         console.log(projects);
         for (var i = 0; i < projectsCount; i++) {
-            console.log(projects[i]);
-            const project = await cfContract.methods.projects(projects[i].returnValues.projectId).call();
-            //console.log(project);
-            //console.log('project owner: ' + project.name);
-            //console.log('project owner: ' + project.owner.toString().toLowerCase());
-            //console.log('wallet: ' + walletAddress.toString().toLowerCase());
-            if (project.owner.toString().toLowerCase() === walletAddress.toString().toLowerCase()) {
-                auxArray.push(projects[i].returnValues.projectId)
+            if (projects[i]) {
+                const project = await cfContract.methods.projects(projects[i].returnValues.projectId).call();
+                //console.log(project);
+                //console.log('project owner: ' + project.name);
+                //console.log('project owner: ' + project.owner.toString().toLowerCase());
+                //console.log('wallet: ' + walletAddress.toString().toLowerCase());
+                if (project.owner.toString().toLowerCase() === walletAddress.toString().toLowerCase()) {
+                    auxArray.push(projects[i].returnValues.projectId)
+                }
             }
         }
-        console.log(auxArray);
+        //console.log(auxArray);
         setOwnedProjects(auxArray);
     }
 
     const getContributedProjectsByAddress = async () => {
         var auxArray = [];
-        //console.log(projects);
-        for (var i = 0; i < projectsCount; i++) {
-            const project = await cfContract.methods.projects(projects[i].returnValues.projectId).call();
-            console.log(project.contributions);
-            if (project.owner.toString().toLowerCase() === walletAddress.toString().toLowerCase()) {
-                auxArray.push(project)
+        for (var i = 0; i < contributions.length; i++) {
+            if (contributions[i] && contributions[i].returnValues.contributor.toString().toLowerCase() === walletAddress.toString().toLowerCase()) {
+                auxArray.push(contributions[i]);
             }
         }
-        //setOwnedProjects(auxArray);
+        console.log(auxArray);
+        setCurrentAddressContributions(auxArray);
     }
 
     const createProjectHandler = async () => {
@@ -120,7 +143,11 @@ const ObjectList = ({ projectsList, projectsCount }) => {
             const parsedGoal = (goal);
             const parsedDeadline = Math.floor(new Date(deadline).getTime() / 1000);
             const parsedMinimumContribution = (minimumContribution);
-            const result = await cfContract.methods.createProject(name, description, parsedGoal, parsedDeadline, parsedMinimumContribution, 0, tokenAddress).send({ from: walletAddress, gas: '1000000' });
+            if (selectedToken === 'ETH') {
+                const result = await cfContract.methods.createProject(name, description, parsedGoal, parsedDeadline, parsedMinimumContribution, 0, tokenAddress).send({ from: walletAddress, gas: '1000000' });
+            } else {
+                const result = await cfContract.methods.createProject(name, description, parsedGoal, parsedDeadline, parsedMinimumContribution, 1, tokenAddress).send({ from: walletAddress, gas: '1000000' });
+            }
             const newArray = [...projects, result.events.ProjectCreated];
             setProjects(newArray);
 
@@ -147,7 +174,12 @@ const ObjectList = ({ projectsList, projectsCount }) => {
                 from: walletAddress,
                 value: parsedContributionAmount,
             });
-            console.log(contributeTx);
+            var newArray = [...contributions, contributeTx.events.ContributionAdded];
+            setContributions(newArray);
+            newArray = [];
+            newArray = [...currentAddressContributions, contributeTx.events.ContributionAdded];
+            setCurrentAddressContributions(newArray);
+            //console.log(contributeTx);
 
             // Reset the form fields after successful creation
             setContributionAmount('');
@@ -184,7 +216,60 @@ const ObjectList = ({ projectsList, projectsCount }) => {
         }
     }
 
-    const toggleContribute = async (projectName, projectId) => {
+    const withdrawHandler = async (projectId: any) => {
+        try {
+            if (currentAddressContributions.some((contribution) => Object.values(contribution.returnValues.projectId).includes(projectId))) {
+                //user contributed to selected project
+                const web3 = new Web3('HTTP://127.0.0.1:7545');
+                const project = await cfContract.methods.projects(projectId).call();
+                //console.log(project)
+                const today = new Date();
+                const projDeadline = new Date(project.deadline * 1000);
+                if (today.getTime() > projDeadline.getTime()) {
+                    //deadline was reached
+                    if (web3.utils.fromWei(project.totalContributions, 'ether') > project.goal) {
+                        //Goal has been reached so user can claim rewards or withdraw funds
+                        if (project.owner.toString().toLowerCase() === walletAddress.toString().toLowerCase()) {
+                            const funds = await cfContract.methods.withdrawFunds(projectId).send({ from: walletAddress });
+                            alert('Funds retrieved successfully!');
+                        } else {
+                            const reward = await cfContract.methods.claimRewards(projectId).send({ from: walletAddress });
+                            alert('Rewards claimed successfully!');
+                        }
+                    } else {
+                        const hasClaimed = checkIfAddressHasClaimed(projectId);
+                        if (!hasClaimed) {
+                            const reward = await cfContract.methods.claimContribution(projectId).send({ from: walletAddress });
+                            const newArray = [...claimedContributions, reward.events.ContributionClaimed];
+                            setClaimedContributions(newArray);
+                        } else {
+                            alert('You have already claimed your contribution.')
+                        }
+                    }
+                } else {
+                    //deadline is yet to be reached
+                    alert('Deadline has not been reached yet.')
+                }
+            } else {
+                //user not contributed to selected project
+                alert('You have not contributed to this project.')
+            }
+        } catch (err: any) {
+            alert(err)
+        }
+    }
+
+    const checkIfAddressHasClaimed = (projectId) => {
+        for (var i = 0; i < claimedContributions.length; i++) {
+            if (claimedContributions[i] && claimedContributions[i].returnValues.projectId == projectId && claimedContributions[i].returnValues.claimant.toString().toLowerCase() === walletAddress.toString().toLowerCase()) {
+                return true
+            } else {
+                return false
+            }
+        }
+    }
+
+    const toggleContribute = async (projectName: any, projectId: any) => {
         setProjectToContribute(projectName);
         setProjectToContributeId(projectId);
         setShowModal(true);
@@ -195,12 +280,16 @@ const ObjectList = ({ projectsList, projectsCount }) => {
         setShowModal(false);
     }
 
-    const toggleInject = async (projectName, projectId) => {
+    const toggleInject = async (projectName: any, projectId: any) => {
         setProjectToContribute(projectName);
         setProjectToContributeId(projectId);
         setIsInjection(true);
         setShowModal(true);
     }
+
+    const handleOptionChange = (event) => {
+        setSelectedToken(event.target.value);
+    };
 
     return (
         <div>
@@ -244,14 +333,14 @@ const ObjectList = ({ projectsList, projectsCount }) => {
                         {projects.map((project: any, index: any) => (
                             <tr key={index}>
                                 <td>{project.returnValues.name}</td>
-                                <td>{project.returnValues.deadline}</td>
+                                <td>{project.deadlineDate.toString()}</td>
                                 <td>{project.returnValues.goal}</td>
                                 {ownedProjects.some((ownedProject) => Object.values(ownedProject).includes(project.returnValues.projectId)) ?
                                     <td align='center'><button onClick={() => toggleInject(project.returnValues.name, project.returnValues.projectId)} className='button is-info'>Inject</button></td>
                                     :
                                     <td align='center'><button onClick={() => toggleContribute(project.returnValues.name, project.returnValues.projectId)} className='button is-info'>Contribute</button></td>
                                 }
-                                <td align='center'><button onClick={() => getContributedProjectsByAddress()} className='button is-info'>Withdraw</button></td>
+                                <td align='center'><button onClick={() => withdrawHandler(project.returnValues.projectId)} className='button is-info'>Withdraw</button></td>
                             </tr>
                         ))}
                     </tbody>
@@ -295,12 +384,25 @@ const ObjectList = ({ projectsList, projectsCount }) => {
                     </div>
 
                     <div className="field">
+                        <div className="control">
+                            <label className="radio">
+                                <input type="radio" name="question" value="ETH" checked={selectedToken === 'ETH'} onChange={handleOptionChange} />
+                                ETH
+                            </label>
+                            <label className="radio">
+                                <input type="radio" name="question" value="ERC Token" checked={selectedToken === 'ERC Token'} onChange={handleOptionChange} />
+                                ERC Token
+                            </label>
+                        </div>
+                    </div>
+
+                    <div className="field">
                         <label className="label">Accepted Token</label>
                         <div className="control">
                             <div className="select">
                                 <select value={tokenAddress} onChange={(e) => setTokenAddress(e.target.value)}>
                                     {acceptedTokens.map((token: any, index: any) => (
-                                        <option>{token.returnValues.ERC20Token}</option>
+                                        <option key={token.returnValues.address}>{token.returnValues.ERC20Token}</option>
                                     ))}
                                 </select>
                             </div>
