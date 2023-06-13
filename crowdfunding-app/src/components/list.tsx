@@ -33,14 +33,17 @@ const ObjectList = ({ projectsList, projectsCount }) => {
         fetchEvents();
         fetchAcceptedTokens();
         const address = getCurrentWalletConnected();
-        console.log(projectsList);
         setProjects(projectsList);
-        getOwnedProjectsByAddress();
+        //getOwnedProjectsByAddress();
     }, []);
+
+    useEffect(() => {
+        getOwnedProjectsByAddress();
+    }, [projects]);
 
     const fetchEvents = async () => {
         const event = cfContract.events.ProjectCreated();
-        event.on('data', function (event) {
+        event.on('data', function (event: any) {
             console.log(event);
             const newArray = [...projects, event];
             setProjects(newArray);
@@ -83,14 +86,19 @@ const ObjectList = ({ projectsList, projectsCount }) => {
 
     const getOwnedProjectsByAddress = async () => {
         var auxArray = [];
-        //console.log(projects);
+        console.log(projects);
         for (var i = 0; i < projectsCount; i++) {
+            console.log(projects[i]);
             const project = await cfContract.methods.projects(projects[i].returnValues.projectId).call();
             //console.log(project);
+            //console.log('project owner: ' + project.name);
+            //console.log('project owner: ' + project.owner.toString().toLowerCase());
+            //console.log('wallet: ' + walletAddress.toString().toLowerCase());
             if (project.owner.toString().toLowerCase() === walletAddress.toString().toLowerCase()) {
-                auxArray.push(project)
+                auxArray.push(projects[i].returnValues.projectId)
             }
         }
+        console.log(auxArray);
         setOwnedProjects(auxArray);
     }
 
@@ -239,9 +247,9 @@ const ObjectList = ({ projectsList, projectsCount }) => {
                                 <td>{project.returnValues.deadline}</td>
                                 <td>{project.returnValues.goal}</td>
                                 {ownedProjects.some((ownedProject) => Object.values(ownedProject).includes(project.returnValues.projectId)) ?
-                                    <td align='center'><button onClick={() => toggleContribute(project.returnValues.name, project.returnValues.projectId)} className='button is-info'>Contribute</button></td>
-                                    :
                                     <td align='center'><button onClick={() => toggleInject(project.returnValues.name, project.returnValues.projectId)} className='button is-info'>Inject</button></td>
+                                    :
+                                    <td align='center'><button onClick={() => toggleContribute(project.returnValues.name, project.returnValues.projectId)} className='button is-info'>Contribute</button></td>
                                 }
                                 <td align='center'><button onClick={() => getContributedProjectsByAddress()} className='button is-info'>Withdraw</button></td>
                             </tr>
