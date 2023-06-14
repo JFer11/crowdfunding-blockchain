@@ -98,7 +98,7 @@ contract CrowdfundingProject is Ownable, ReentrancyGuard {
             amount = allowance;
             p.ERCToken.transferFrom(msg.sender, address(this), amount);
         }
-        p.contributions[msg.sender] += amount; // TODO: check if this is ok
+        p.contributions[msg.sender] += amount;
         p.totalContributions += amount;
         emit ContributionAdded(_projectId, msg.sender, amount);
         if (p.totalContributions >= p.goal) {
