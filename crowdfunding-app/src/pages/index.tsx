@@ -21,7 +21,8 @@ const Home = () => {
   useEffect(() => {
     fetchEvents();
     getProjectsHandler();
-    const ownerAddress = getOwnerAddress();;
+    const ownerAddress = getOwnerAddress();
+    //console.log(ownerAddress);
     setOwnerAddress(ownerAddress);
     const currentAddress = getCurrentWalletConnected();
     setWallet(currentAddress);
@@ -109,7 +110,7 @@ const Home = () => {
         </div>
       </nav>
       <section>
-        {ownerAddress.toString().toLowerCase() == walletAddress.toString().toLowerCase() ?
+        {ownerAddress?.toString().toLowerCase() == walletAddress?.toString().toLowerCase() ?
           <div className='container mt-4'>
             <Admin projectsList={projectsList} projectsCount={projectsCount} />
           </div>

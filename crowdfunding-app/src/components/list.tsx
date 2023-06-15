@@ -11,6 +11,7 @@ const ObjectList = ({ projectsList, projectsCount }) => {
     const [projects, setProjects] = useState<any[]>([]);
     const [acceptedTokens, setAcceptedTokens] = useState<any[]>([]);
     const [ownedProjects, setOwnedProjects] = useState<any[]>([]);
+    const [web3, setWeb3] = useState({})
 
     //Create contract variables
     const [name, setName] = useState('');
@@ -36,6 +37,8 @@ const ObjectList = ({ projectsList, projectsCount }) => {
     const [isInjection, setIsInjection] = useState(false);
 
     useEffect(() => {
+        const web3 = new Web3('HTTP://127.0.0.1:7545');
+        setWeb3(web3);
         fetchEvents();
         fetchAcceptedTokens();
         getCurrentWalletConnected();
@@ -45,7 +48,7 @@ const ObjectList = ({ projectsList, projectsCount }) => {
         setProjects(newArray);
         getContributionsHandler();
         getContributionsClaimedHandler();
-        console.log(claimedContributions)
+        //console.log(projects)
         getContributedProjectsByAddress();
     }, []);
 
@@ -110,7 +113,7 @@ const ObjectList = ({ projectsList, projectsCount }) => {
 
     const getOwnedProjectsByAddress = async () => {
         var auxArray = [];
-        console.log(projects);
+        //console.log(projects);
         for (var i = 0; i < projectsCount; i++) {
             if (projects[i]) {
                 const project = await cfContract.methods.projects(projects[i].returnValues.projectId).call();
@@ -134,20 +137,22 @@ const ObjectList = ({ projectsList, projectsCount }) => {
                 auxArray.push(contributions[i]);
             }
         }
-        console.log(auxArray);
+        //console.log(auxArray);
         setCurrentAddressContributions(auxArray);
     }
 
     const createProjectHandler = async () => {
         try {
+            var result;
             const parsedGoal = (goal);
             const parsedDeadline = Math.floor(new Date(deadline).getTime() / 1000);
-            const parsedMinimumContribution = (minimumContribution);
+            const parsedMinimumContribution = web3?.utils.toWei(minimumContribution, 'ether');
             if (selectedToken === 'ETH') {
-                const result = await cfContract.methods.createProject(name, description, parsedGoal, parsedDeadline, parsedMinimumContribution, 0, tokenAddress).send({ from: walletAddress, gas: '1000000' });
+                result = await cfContract.methods.createProject(name, description, parsedGoal, parsedDeadline, parsedMinimumContribution, 0, tokenAddress).send({ from: walletAddress, gas: '1000000' });
             } else {
-                const result = await cfContract.methods.createProject(name, description, parsedGoal, parsedDeadline, parsedMinimumContribution, 1, tokenAddress).send({ from: walletAddress, gas: '1000000' });
+                result = await cfContract.methods.createProject(name, description, parsedGoal, parsedDeadline, parsedMinimumContribution, 1, tokenAddress).send({ from: walletAddress, gas: '1000000' });
             }
+            console.log(result);
             const newArray = [...projects, result.events.ProjectCreated];
             setProjects(newArray);
 
@@ -160,7 +165,6 @@ const ObjectList = ({ projectsList, projectsCount }) => {
 
             // Show a success message or perform any other actions
             alert('Project created successfully!');
-            cancelNewProjectHandler();
         } catch (err: any) {
             alert(err)
         }
@@ -168,7 +172,7 @@ const ObjectList = ({ projectsList, projectsCount }) => {
 
     const contributeHandler = async () => {
         try {
-            const web3 = new Web3('HTTP://127.0.0.1:7545');
+            console.log(projectToContributeId);
             const parsedContributionAmount = web3.utils.toWei(contributionAmount, 'ether');
             const contributeTx = await cfContract.methods.contribute(projectToContributeId).send({
                 from: walletAddress,
@@ -195,7 +199,6 @@ const ObjectList = ({ projectsList, projectsCount }) => {
 
     const injectionHandler = async () => {
         try {
-            const web3 = new Web3('HTTP://127.0.0.1:7545');
             const parsedContributionAmount = web3.utils.toWei(contributionAmount, 'ether');
             const contributeTx = await cfContract.methods.injectRewards(projectToContributeId).send({
                 from: walletAddress,
@@ -220,7 +223,6 @@ const ObjectList = ({ projectsList, projectsCount }) => {
         try {
             if (currentAddressContributions.some((contribution) => Object.values(contribution.returnValues.projectId).includes(projectId))) {
                 //user contributed to selected project
-                const web3 = new Web3('HTTP://127.0.0.1:7545');
                 const project = await cfContract.methods.projects(projectId).call();
                 //console.log(project)
                 const today = new Date();
@@ -300,18 +302,6 @@ const ObjectList = ({ projectsList, projectsCount }) => {
                             <strong>{projectsCount}</strong> projects
                         </p>
                     </div>
-                    <div className="level-item">
-                        <div className="field has-addons">
-                            <p className="control">
-                                <input className="input" type="text" placeholder="Find a project" />
-                            </p>
-                            <p className="control">
-                                <button className="button">
-                                    Search
-                                </button>
-                            </p>
-                        </div>
-                    </div>
                 </div>
 
                 <div className="level-right">
@@ -332,9 +322,9 @@ const ObjectList = ({ projectsList, projectsCount }) => {
                     <tbody>
                         {projects.map((project: any, index: any) => (
                             <tr key={index}>
-                                <td>{project.returnValues.name}</td>
-                                <td>{project.deadlineDate.toString()}</td>
-                                <td>{project.returnValues.goal}</td>
+                                <td>{project?.returnValues.name}</td>
+                                <td>{project?.deadlineDate?.toString()}</td>
+                                <td>{project?.returnValues.goal}</td>
                                 {ownedProjects.some((ownedProject) => Object.values(ownedProject).includes(project.returnValues.projectId)) ?
                                     <td align='center'><button onClick={() => toggleInject(project.returnValues.name, project.returnValues.projectId)} className='button is-info'>Inject</button></td>
                                     :
